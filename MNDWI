@@ -1,0 +1,63 @@
+//Add study area/region of interest (ROI)
+Map.centerObject(roi);
+
+var s2 = ee.ImageCollection("COPERNICUS/S2_HARMONIZED")
+            .filterBounds(roi)
+            .filterDate('2020-06-01','2020-10-01')
+            .filterMetadata('CLOUDY_PIXEL_PERCENTAGE','less_than',0.2)
+            .median()
+            .clip(roi)
+
+var  mndwi = s2.normalizedDifference(['B3','B11'])
+Map.addLayer(mndwi,{},'MNDWI map',false)
+
+var ndwiselect=mndwi.expression(
+  'b(0) > 0 ? 1 : 0',
+  {b:mndwi});
+  
+//Map.addLayer(ndwiselect,{},'MNDWI 2 classes', false)
+//  var water = mndwiselect.eq(1) .selfMask()
+//Map.addLayer(water,imageVisParam,'Water Body', false)
+
+var VisParam = {bands: ["B8","B3","B2"],
+                gamma: 1,
+                max: 2072.944264830613,
+                min: 992.1486660669242,
+                opacity: 1
+}
+
+Map.addLayer(s2,VisParam,'Sentinel Image')
+
+var mndwi_water = mndwi.gt(0.33) 
+//Map.addLayer (mndwi_water, {}, 'THRESH')
+
+var thres_water = mndwi_water.eq(1) .selfMask()
+Map.addLayer(thres_water,{},'THRESHOLD')
+
+// function to calculate  area
+var water_area = ee.Image.pixelArea().multiply(thres_water)
+
+Map.addLayer(water_area,{},'water')
+
+var calulateArea = function(image){
+var area = water_area.reduceRegion({
+  reducer: ee.Reducer.sum(), 
+  geometry:roi, 
+  scale:10,
+  maxPixels:1e13 
+})
+ return ee.Number(area.get('area'))
+}
+var finalArea = calulateArea(water_area)
+print('Total Area of water in cubic meter: ',finalArea)//.divide(1e4))
+
+//Export
+Export.image.toDrive({
+  image: mndwi,
+  description:'MNDWI_2023',
+  folder: 'GEE',
+  region: roi,
+  scale: 10,
+  maxPixels: 592601310,
+  crs: 'EPSG:32644',
+})
