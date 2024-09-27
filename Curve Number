@@ -1,0 +1,151 @@
+var aoi = geometry;
+
+Map.centerObject(aoi,9)
+var soil_class = ee.Image("OpenLandMap/SOL/SOL_TEXTURE-CLASS_USDA-TT_M/v02")
+                .select('b0').clip(aoi)
+                .rename('soil');
+                
+// Conerting soil texture into soil groups
+// A == 1, B == 2, C ==3, D ==4
+var soil_grp = soil_class.expression(
+    "(b('soil') > 10) ? 4" +
+      ":(b('soil') > 4) ? 3" +
+        ":(b('soil') > 1) ? 2" +
+          ":(b('soil') > 0) ? 1" +
+            ":0"
+).rename('soil');
+var modis = ee.ImageCollection("MODIS/006/MCD12Q1")
+    .filterDate('2020-01-01','2021-04-30')
+var lulc = modis.select('LC_Type1').first().clip(aoi)
+            .rename('lulc');
+            
+//Map.addLayer(soil, {}, "Soil texture class");
+//Map.addLayer(lulc, {}, "LULC");
+
+//Combined LULC & Soil in single image
+var lulc_soil = lulc.addBands(soil_grp)
+//print (lulc_soil);
+Map.addLayer (lulc_soil, {}, 'Soil & LULC', 0)
+
+//Create CN map using an expression
+var CN_whole = lulc_soil.expression(
+  "(b('soil') == 1) and (b('lulc') ==1) ? 35" +
+  ":(b('soil') == 1) and (b('lulc') ==2) ? 25" +
+  ":(b('soil') == 1) and (b('lulc') ==3) ? 45" +
+  ":(b('soil') == 1) and (b('lulc') ==4) ? 39" +
+  ":(b('soil') == 1) and (b('lulc') ==5) ? 45" +
+  ":(b('soil') == 1) and (b('lulc') ==6) ? 49" +
+  ":(b('soil') == 1) and (b('lulc') ==7) ? 68" +
+  ":(b('soil') == 1) and (b('lulc') ==8) ? 36" +
+  ":(b('soil') == 1) and (b('lulc') ==9) ? 45" +
+  ":(b('soil') == 1) and (b('lulc') ==10) ? 30" +
+  ":(b('soil') == 1) and (b('lulc') ==11) ? 95" +
+  ":(b('soil') == 1) and (b('lulc') ==12) ? 67" +
+  ":(b('soil') == 1) and (b('lulc') ==13) ? 72" +
+  ":(b('soil') == 1) and (b('lulc') ==14) ? 63" +
+  ":(b('soil') == 1) and (b('lulc') ==15) ? 100" +
+  ":(b('soil') == 1) and (b('lulc') ==16) ? 74" +
+  ":(b('soil') == 1) and (b('lulc') ==17) ? 100" +   
+      ":(b('soil') == 2) and (b('lulc') ==1) ? 50" +
+      ":(b('soil') == 2) and (b('lulc') ==2) ? 55" +
+      ":(b('soil') == 2) and (b('lulc') ==3) ? 66" +
+      ":(b('soil') == 2) and (b('lulc') ==4) ? 61" +
+      ":(b('soil') == 2) and (b('lulc') ==5) ? 66" +
+      ":(b('soil') == 2) and (b('lulc') ==6) ? 69" +
+      ":(b('soil') == 2) and (b('lulc') ==7) ? 79" +
+      ":(b('soil') == 2) and (b('lulc') ==8) ? 60" +
+      ":(b('soil') == 2) and (b('lulc') ==9) ? 66" +
+      ":(b('soil') == 2) and (b('lulc') ==10) ? 58" +
+      ":(b('soil') == 2) and (b('lulc') ==11) ? 95" +
+      ":(b('soil') == 2) and (b('lulc') ==12) ? 78" +
+      ":(b('soil') == 2) and (b('lulc') ==13) ? 82" +
+      ":(b('soil') == 2) and (b('lulc') ==14) ? 75" +
+      ":(b('soil') == 2) and (b('lulc') ==15) ? 100" +
+      ":(b('soil') == 2) and (b('lulc') ==16) ? 84" +
+      ":(b('soil') == 2) and (b('lulc') ==17) ? 100" +
+        ":(b('soil') == 3) and (b('lulc') ==1) ? 73" +
+        ":(b('soil') == 3) and (b('lulc') ==2) ? 70" +
+        ":(b('soil') == 3) and (b('lulc') ==3) ? 77" +
+        ":(b('soil') == 3) and (b('lulc') ==4) ? 74" +
+        ":(b('soil') == 3) and (b('lulc') ==5) ? 77" +
+        ":(b('soil') == 3) and (b('lulc') ==6) ? 79" +
+        ":(b('soil') == 3) and (b('lulc') ==7) ? 86" +
+        ":(b('soil') == 3) and (b('lulc') ==8) ? 73" +
+        ":(b('soil') == 3) and (b('lulc') ==9) ? 77" +
+        ":(b('soil') == 3) and (b('lulc') ==10) ? 71" +
+        ":(b('soil') == 3) and (b('lulc') ==11) ? 95" +
+        ":(b('soil') == 3) and (b('lulc') ==12) ? 85" +
+        ":(b('soil') == 3) and (b('lulc') ==13) ? 87" +
+        ":(b('soil') == 3) and (b('lulc') ==14) ? 83" +
+        ":(b('soil') == 3) and (b('lulc') ==15) ? 100" +
+        ":(b('soil') == 3) and (b('lulc') ==16) ? 90" +
+        ":(b('soil') == 3) and (b('lulc') ==17) ? 100" +
+            ":(b('soil') == 4) and (b('lulc') ==1) ? 79" +
+            ":(b('soil') == 4) and (b('lulc') ==2) ? 77" +
+            ":(b('soil') == 4) and (b('lulc') ==3) ? 83" +
+            ":(b('soil') == 4) and (b('lulc') ==4) ? 80" +
+            ":(b('soil') == 4) and (b('lulc') ==5) ? 83" +
+            ":(b('soil') == 4) and (b('lulc') ==6) ? 89" +
+            ":(b('soil') == 4) and (b('lulc') ==7) ? 89" +
+            ":(b('soil') == 4) and (b('lulc') ==8) ? 79" +
+            ":(b('soil') == 4) and (b('lulc') ==9) ? 83" +
+            ":(b('soil') == 4) and (b('lulc') ==10) ? 78" +
+            ":(b('soil') == 4) and (b('lulc') ==11) ? 95" +
+            ":(b('soil') == 4) and (b('lulc') ==12) ? 89" +
+            ":(b('soil') == 4) and (b('lulc') ==13) ? 89" +
+            ":(b('soil') == 4) and (b('lulc') ==14) ? 87" +
+            ":(b('soil') == 4) and (b('lulc') ==15) ? 100" +
+            ":(b('soil') == 4) and (b('lulc') ==16) ? 92" +
+            ":(b('soil') == 4) and (b('lulc') ==17) ? 100" +
+                ":(b('soil') == 0) ? 100" +
+                ": 0"
+);
+var CN2 = CN_whole.clip(aoi).rename('CN2');
+Map.addLayer(CN2, {}, 'CN2 values', 0);
+
+var CN1 = CN2.expression(
+  'CN2 / (2.281-(0.0128*CN2))', {
+    'CN2': CN2.select('CN2')
+  }).rename('CN1');
+
+var CN3 = CN2.expression(
+  'CN2 / (0.427+(0.00573*CN2))', {
+    'CN2': CN2.select('CN2')
+  }).rename('CN3');
+  
+var S_image1 = CN1.expression(
+  '(25400/CN1)-254', {
+    'CN1': CN1.select('CN1')
+}).rename ('S_value1');
+
+var S_image2 = CN2.expression(
+  '(25400/CN2)-254', {
+    'CN2': CN2.select('CN2')
+}).rename ('S_value2');
+
+var S_image3 = CN3.expression(
+  '(25400/CN3)-254', {
+    'CN3': CN3.select('CN3')
+}).rename ('S_value3');
+
+Map.addLayer (S_image1, {}, 'S1', 0)
+Map.addLayer (S_image2, {}, 'S2', 0)
+Map.addLayer (S_image3, {}, 'S3', 0)
+
+Export.image.toDrive ({
+  image: CN2,
+  description: 'CN2',
+  scale: 10,
+  maxPixels: 1e13,
+  region: aoi,
+  crs: 'EPSG:4326'
+});
+Export.image.toDrive ({
+  image: soil_grp,
+  description: 'soil_grp',
+  scale: 10,
+  maxPixels: 1e13,
+  region: aoi,
+  crs: 'EPSG:4326'
+});
+
