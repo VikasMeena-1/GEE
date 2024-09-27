@@ -1,3 +1,4 @@
+var roi = ee.FeatureCollection("projects/ee-meenavikas446/assets/DudhwaFinal_Bndry_Tehsilwise");
 Map.centerObject(roi, 8);
 //Map.addLayer(roi, {}, 'Dudhwa', false);
 
@@ -16,6 +17,9 @@ var visParams = {
 };
 
 Map.addLayer(clipped_image, visParams, 'Landsat 8 Image', false);
+
+//Add training sample features
+Points = ee.FeatureCollection("users/meenavikas446/Dudhwa_Training_Points"),
 
 // Ensure Water, Forest, Builtup, etc., are defined
 var trainingSamples = Water.merge(Forest).merge(Builtup).merge(Barren).merge(Agri).merge(Grassland);
