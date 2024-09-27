@@ -1,0 +1,102 @@
+Map.centerObject(roi, 8);
+//Map.addLayer(roi, {}, 'Dudhwa', false);
+
+var landsat8 = ee.ImageCollection("LANDSAT/LC08/C02/T1_TOA")
+                  .filterDate('2023-01-01', '2023-12-31')
+                  .filterBounds(roi)
+                  .filterMetadata('CLOUD_COVER', 'less_than', 10)
+                  .median();
+
+var bands = ['B2', 'B3', 'B4', 'B5', 'B6', 'B7'];
+var clipped_image = landsat8.select(bands).clip(roi);
+var visParams = {
+  bands: ['B4', 'B3', 'B2'],
+  min: 0,  
+  max: 0.3,  
+};
+
+Map.addLayer(clipped_image, visParams, 'Landsat 8 Image', false);
+
+// Ensure Water, Forest, Builtup, etc., are defined
+var trainingSamples = Water.merge(Forest).merge(Builtup).merge(Barren).merge(Agri).merge(Grassland);
+
+// Sample the input imagery to generate training data
+var training = clipped_image.sampleRegions({
+  collection: trainingSamples,
+  properties: ['Class'],
+  scale: 30
+});
+
+// Train a classifier using the CART algorithm
+var classifier = ee.Classifier.smileCart().train({
+  features: training,
+  classProperty: 'Class',
+  inputProperties: bands
+});
+
+// Classify the image
+var classified = clipped_image.classify(classifier);
+
+// Define a color palette for the classes
+var palette = ['#1E90FF', '#006400', '#fc2f00', '#D2B48C', '#ffff3f', '#7CFC00']; 
+
+// Display the classification result
+Map.addLayer(classified, {min: 1, max: 6, palette: palette}, 'Classified Image');
+
+// Add legend (optional) 
+var legend = ui.Panel({
+  style: {
+    position: 'bottom-left',
+    padding: '8px 15px'
+  }
+});
+
+var title = ui.Label({
+  value: 'Land Cover Legend',
+  style: {
+    fontWeight: 'bold',
+    fontSize: '18px',
+    margin: '0 0 4px 0',
+    padding: '0'
+  }
+});
+legend.add(title);
+
+var makeRow = function(color, name) {
+  var colorBox = ui.Label({
+    style: {
+      backgroundColor: color,
+      padding: '8px',
+      margin: '0 0 4px 0'
+    }
+  });
+
+  var description = ui.Label({
+    value: name,
+    style: {margin: '0 0 4px 6px'}
+  });
+
+  return ui.Panel({
+    widgets: [colorBox, description],
+    layout: ui.Panel.Layout.Flow('horizontal')
+  });
+};
+
+var legendColors = ['#1E90FF', '#006400', '#fc2f00', '#D2B48C', '#ffff3f', '#7CFC00'];
+var legendLabels = ['Water', 'Forest', 'Builtup', 'Barren', 'Agri', 'Grassland'];
+
+for (var i = 0; i < legendColors.length; i++) {
+  legend.add(makeRow(legendColors[i], legendLabels[i]));
+}
+Map.add(legend);
+
+// Export the classified image to Google Drive
+Export.image.toDrive({
+  image: classified,  
+  description: '2023_LULC',
+  folder: 'GEE',
+  region: roi,
+  scale: 30, 
+  crs: 'EPSG:32644',
+  maxPixels: 1e13
+});
