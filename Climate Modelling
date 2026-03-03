@@ -1,0 +1,185 @@
+"""
+JAIPUR DISTRICT MONTHLY RAINFALL PROJECTION (1950–2100)
+Hydrological Study – Multi-Model CMIP6 Ensemble
+Observed: IMD 0.25°
+Models: MPI-ESM1-2-HR, ACCESS-CM2, CNRM-CM6-1, EC-Earth3
+Scenarios: SSP2-4.5 & SSP5-8.5
+"""
+
+# ====================================================
+# 1. IMPORT LIBRARIES
+# ====================================================
+
+import xarray as xr
+import numpy as np
+import pandas as pd
+import geopandas as gpd
+import rioxarray
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import QuantileTransformer
+import pymannkendall as mk
+import warnings
+warnings.filterwarnings("ignore")
+
+
+# ====================================================
+# 2. USER PATHS
+# ====================================================
+
+IMD_FILE = "data/raw/imd_daily.nc"
+SHAPEFILE = "data/shapefile/jaipur_district.shp"
+
+MODELS = {
+    "MPI": {
+        "hist": "data/raw/MPI_hist.nc",
+        "ssp245": "data/raw/MPI_ssp245.nc",
+        "ssp585": "data/raw/MPI_ssp585.nc"
+    },
+    "ACCESS": {
+        "hist": "data/raw/ACCESS_hist.nc",
+        "ssp245": "data/raw/ACCESS_ssp245.nc",
+        "ssp585": "data/raw/ACCESS_ssp585.nc"
+    },
+    "CNRM": {
+        "hist": "data/raw/CNRM_hist.nc",
+        "ssp245": "data/raw/CNRM_ssp245.nc",
+        "ssp585": "data/raw/CNRM_ssp585.nc"
+    },
+    "ECE": {
+        "hist": "data/raw/ECE_hist.nc",
+        "ssp245": "data/raw/ECE_ssp245.nc",
+        "ssp585": "data/raw/ECE_ssp585.nc"
+    }
+}
+
+
+# ====================================================
+# 3. CORE FUNCTIONS
+# ====================================================
+
+def clip_to_district(ds):
+    gdf = gpd.read_file(SHAPEFILE)
+    ds = ds.rio.write_crs("EPSG:4326")
+    clipped = ds.rio.clip(gdf.geometry, gdf.crs)
+    return clipped.mean(dim=["lat", "lon"])
+
+
+def process_imd():
+    ds = xr.open_dataset(IMD_FILE)
+    monthly = ds['rain'].resample(time='1M').sum()
+    monthly = clip_to_district(monthly)
+    return monthly.sel(time=slice("1950","2026"))
+
+
+def process_cmip(path):
+    ds = xr.open_dataset(path)
+    pr = ds['pr'] * 86400 * 30  # kg m-2 s-1 → mm/month
+    monthly = pr.resample(time='1M').mean()
+    return clip_to_district(monthly)
+
+
+def quantile_mapping(obs, model_hist, model_future):
+
+    qt = QuantileTransformer(n_quantiles=1000,
+                             output_distribution='uniform')
+
+    obs = obs.values.reshape(-1,1)
+    model_hist = model_hist.values.reshape(-1,1)
+    model_future = model_future.values.reshape(-1,1)
+
+    qt.fit(model_hist)
+    qt.fit(obs)
+
+    corrected = qt.inverse_transform(
+        qt.transform(model_future)
+    )
+
+    return corrected.flatten()
+
+
+def ensemble_mean(models_array):
+    stacked = np.vstack(models_array)
+    return np.mean(stacked, axis=0), np.std(stacked, axis=0)
+
+
+def mann_kendall(series):
+    result = mk.original_test(series)
+    print("\nTrend:", result.trend)
+    print("p-value:", result.p)
+    print("Sen slope (mm/month):", result.slope)
+
+
+# ====================================================
+# 4. MAIN WORKFLOW
+# ====================================================
+
+if __name__ == "__main__":
+
+    print("\nProcessing IMD observed rainfall...")
+    imd = process_imd()
+    mann_kendall(imd.values)
+
+    ensemble_245 = []
+    ensemble_585 = []
+
+    print("\nProcessing CMIP6 models...")
+
+    for model_name, paths in MODELS.items():
+
+        print(f"Running {model_name}...")
+
+        hist = process_cmip(paths["hist"]).sel(time=slice("1950","2014"))
+        ssp245 = process_cmip(paths["ssp245"]).sel(time=slice("2015","2100"))
+        ssp585 = process_cmip(paths["ssp585"]).sel(time=slice("2015","2100"))
+
+        corrected_245 = quantile_mapping(
+            imd.sel(time=slice("1950","2014")),
+            hist,
+            ssp245
+        )
+
+        corrected_585 = quantile_mapping(
+            imd.sel(time=slice("1950","2014")),
+            hist,
+            ssp585
+        )
+
+        ensemble_245.append(corrected_245)
+        ensemble_585.append(corrected_585)
+
+
+    # ---- ENSEMBLE STATISTICS ----
+
+    mean_245, std_245 = ensemble_mean(ensemble_245)
+    mean_585, std_585 = ensemble_mean(ensemble_585)
+
+    time_future = ssp245.time
+
+    # ====================================================
+    # 5. PLOT PROJECTIONS
+    # ====================================================
+
+    plt.figure(figsize=(12,6))
+
+    plt.plot(imd.time, imd.values, label="Observed (IMD)", color="black")
+
+    plt.plot(time_future, mean_245,
+             label="SSP2-4.5 (Ensemble Mean)", color="blue")
+    plt.fill_between(time_future,
+                     mean_245-std_245,
+                     mean_245+std_245,
+                     color="blue", alpha=0.2)
+
+    plt.plot(time_future, mean_585,
+             label="SSP5-8.5 (Ensemble Mean)", color="red")
+    plt.fill_between(time_future,
+                     mean_585-std_585,
+                     mean_585+std_585,
+                     color="red", alpha=0.2)
+
+    plt.legend()
+    plt.ylabel("Monthly Rainfall (mm)")
+    plt.title("Jaipur District Rainfall Projection (Ensemble CMIP6)")
+    plt.show()
+
+    print("\nProjection complete to 2100.")
